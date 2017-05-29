@@ -16,10 +16,17 @@
 
 package com.haulmont.mp2xls.writer;
 
-import com.haulmont.mp2xls.object.LocalizationsBatch;
-import com.haulmont.mp2xls.reader.MessagesFolderReader;
 import com.haulmont.mp2xls.object.LocalizationLog;
+import com.haulmont.mp2xls.object.LocalizationsBatch;
 import com.haulmont.mp2xls.object.MessagesLocalization;
+import com.haulmont.mp2xls.reader.MessagesFolderReader;
+import com.haulmont.mp2xls.writer.commons.MessagePropertiesIOFactory;
+import org.apache.commons.configuration2.Configuration;
+import org.apache.commons.configuration2.FileBasedConfiguration;
+import org.apache.commons.configuration2.PropertiesConfiguration;
+import org.apache.commons.configuration2.PropertiesConfigurationLayout;
+import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder;
+import org.apache.commons.configuration2.builder.fluent.Parameters;
 import org.apache.commons.lang.StringUtils;
 
 import java.io.File;
@@ -40,7 +47,7 @@ public class LocalizationBatchFileWriter {
         this.fileLocalization = fileLocalization;
     }
 
-    public void process(String localizationFile) throws IOException {
+    public void process(String logFile, boolean overwriteExistingMessages) throws IOException {
         File basePath = new File(fileLocalization.getProjectDirectory());
         List<LocalizationLog> differences = new ArrayList<>();
         for (String localizationPack : fileLocalization.getMessagesLocalizations().keySet()) {
@@ -54,7 +61,8 @@ public class LocalizationBatchFileWriter {
                         contains(localization.getLocaleId() == null ? "en" : localization.getLocaleId()))
                     continue;
 
-                List<String> parameters = Arrays.asList(localization.getMessages().keySet().toArray(new String[localization.getMessages().keySet().size()]));
+                List<String> parameters = Arrays.asList(localization.getMessages().keySet().toArray(
+                        new String[localization.getMessages().keySet().size()]));
                 Collections.sort(parameters, new Comparator<String>() {
                     @Override
                     public int compare(String o1, String o2) {
@@ -86,16 +94,19 @@ public class LocalizationBatchFileWriter {
                 }
 
                 if (stringsToPrint.size() > 0) {
-                    differences.addAll(getDifferences(localization, sourceMessagesLocalizations));
+                    List<LocalizationLog> currentLocalizationBatchDifferences =
+                            getDifferences(localization, sourceMessagesLocalizations);
+                    differences.addAll(currentLocalizationBatchDifferences);
                     File messageFile = new File(basePath, localization.getPath());
 
                     if (!messageFile.exists()) {
                         createNewFileLocalization(stringsToPrint, messageFile);
                         differences.addAll(addedInNewFile);
+                    } else if (overwriteExistingMessages) {
+                        mergeLocalizationProperties(messageFile, currentLocalizationBatchDifferences);
                     }
                 }
             }
-
         }
 
         for (String localizationPack : sourceLocalization.getMessagesLocalizations().keySet()) {
@@ -149,7 +160,40 @@ public class LocalizationBatchFileWriter {
         }
 
         if (differences.size() > 0) {
-            LocalizationLogExcelWriter.exportToXls(differences, localizationFile);
+            LocalizationLogExcelWriter.exportToXls(differences, logFile);
+        }
+    }
+
+    /**
+     * Writing all changed properties to the passed file. Using apache commons-configuration to write properties,
+     * because it preserves the original file format unlike the java.util.Properties class.
+     *
+     * @param messagesFile - messages file
+     * @param diffs - differences
+     */
+    protected void mergeLocalizationProperties(File messagesFile, Collection<LocalizationLog> diffs) {
+        if (diffs == null || diffs.isEmpty())
+            return;
+        try {
+            Parameters parameters = new Parameters();
+            FileBasedConfigurationBuilder<FileBasedConfiguration> builder =
+                    new FileBasedConfigurationBuilder<FileBasedConfiguration>(PropertiesConfiguration.class)
+                            .configure(parameters.properties()
+                                    .setFile(messagesFile)
+                                    .setEncoding("UTF-8")
+                                    .setIOFactory(new MessagePropertiesIOFactory())
+                                    .setLayout(new PropertiesConfigurationLayout())
+                            );
+
+            Configuration configuration = builder.getConfiguration();
+            for (LocalizationLog diff : diffs) {
+                if (LocalizationLog.Type.CHANGED.equals(diff.getType())) {
+                    configuration.setProperty(diff.getParameterName(), diff.getExcelValue());
+                }
+            }
+            builder.save();
+        } catch (Exception e) {
+            throw new RuntimeException("Exception during properties file merging", e);
         }
     }
 
@@ -171,7 +215,7 @@ public class LocalizationBatchFileWriter {
         }
     }
 
-    private boolean addEmptyLine (String currentLine, String prevLine){
+    private boolean addEmptyLine(String currentLine, String prevLine) {
         Pattern p = Pattern.compile("[ \\t]*#?(?<keyPrefix>[a-zA-Z0-9_]+).?(?<keyPostfix>[a-zA-Z0-9_\\.]+)?[ \\t]*=[ \\t]*(?<value>.+)?");
         Matcher cur = p.matcher(currentLine);
         Matcher prev = p.matcher(prevLine);
@@ -180,7 +224,7 @@ public class LocalizationBatchFileWriter {
 
     }
 
-    private List<LocalizationLog> getNotFoundLocalizationInExcel(MessagesLocalization sourceMessagesLocalization,  Set<MessagesLocalization> messagesLocalizations) {
+    private List<LocalizationLog> getNotFoundLocalizationInExcel(MessagesLocalization sourceMessagesLocalization, Set<MessagesLocalization> messagesLocalizations) {
         List<LocalizationLog> notFoundLocalizations = new ArrayList<>();
         List<LocalizationLog> movedMessages = new ArrayList<>();
         MessagesLocalization messagesLocalization = notFindMessagesLocalizationInExcel(sourceMessagesLocalization, messagesLocalizations);
@@ -236,7 +280,8 @@ public class LocalizationBatchFileWriter {
                     }
                 } else if (!StringUtils.equals(messages.get(message), sourceMessages.get(message))) {
                     changedMessages.add(
-                            new LocalizationLog(sourceMessagesLocalization.getPath(), message, sourceMessages.get(message), messages.get(message), LocalizationLog.Type.CHANCED)
+                            new LocalizationLog(sourceMessagesLocalization.getPath(), message,
+                                    sourceMessages.get(message), messages.get(message), LocalizationLog.Type.CHANGED)
                     );
                 }
             }
@@ -272,7 +317,7 @@ public class LocalizationBatchFileWriter {
                 }
             }
         }
-        if(!found) {
+        if (!found) {
             notFoundMessagesLocalization = sourceMessagesLocalization;
         }
 

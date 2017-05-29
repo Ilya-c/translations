@@ -22,7 +22,7 @@ public class LocalizationLog {
     public static enum Type {
         ADDED("A"), 
         ADDED_IN_NEW_FILE("AF"),
-        CHANCED("C"),
+        CHANGED("C"),
         MOVED("M");
 
         private String id;

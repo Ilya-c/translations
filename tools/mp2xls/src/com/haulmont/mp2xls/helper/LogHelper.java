@@ -34,7 +34,7 @@ public class LogHelper {
             case ADDED_IN_NEW_FILE : {
                 message = "Properties are added to new files:";
             } break;
-            case CHANCED : {
+            case CHANGED: {
                 message = "Properties are different in source files and excel file:";
             } break;
             case MOVED: {
@@ -57,7 +57,7 @@ public class LogHelper {
                 font.setColor(HSSFColor.BLUE.index);
                 style.setFillBackgroundColor(HSSFColor.BLUE.index);
             } break;
-            case CHANCED : {
+            case CHANGED: {
                 font.setColor(HSSFColor.ORANGE.index);
                 style.setFillBackgroundColor(HSSFColor.ORANGE.index);
             } break;

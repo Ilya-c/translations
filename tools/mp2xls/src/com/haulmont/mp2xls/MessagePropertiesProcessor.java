@@ -31,6 +31,7 @@ public class MessagePropertiesProcessor {
 
     public static final String READ_OPT = "r";
     public static final String WRITE_OPT = "w";
+    public static final String OVERWRITE_OPT = "o";
     public static final String PROJECT_DIR_OPT = "d";
     public static final String XLS_FILE_OPT = "f";
     public static final String LOG_FILE_OPT = "log";
@@ -40,6 +41,8 @@ public class MessagePropertiesProcessor {
         Options options = new Options();
         options.addOption(READ_OPT, "read", false, "read messages from project and save to XLS");
         options.addOption(WRITE_OPT, "write", false, "load messages from XLS and write to project");
+        options.addOption(OVERWRITE_OPT, "overwrite", false,
+                "overwrite existing messages by changed messages from XLS file");
         options.addOption(PROJECT_DIR_OPT, "projectDir", true, "project root directory");
         options.addOption(XLS_FILE_OPT, "xlsFile", true, "XLS file with translations");
         options.addOption(LOG_FILE_OPT, "logFile", true, "log file");
@@ -80,8 +83,9 @@ public class MessagePropertiesProcessor {
                 fileLocalization.setScanLocalizationIds(languages);
 
                 LocalizationBatchFileWriter fileWriter = new LocalizationBatchFileWriter(sourceLocalization, fileLocalization);
-                fileWriter.process(StringUtils.isNotEmpty(cmd.getOptionValue(LOG_FILE_OPT)) ?
-                        cmd.getOptionValue(LOG_FILE_OPT) : "log.xls");
+                String logFile = StringUtils.isNotEmpty(cmd.getOptionValue(LOG_FILE_OPT)) ?
+                        cmd.getOptionValue(LOG_FILE_OPT) : "log.xls";
+                fileWriter.process(logFile, cmd.hasOption(OVERWRITE_OPT));
             }
         } catch (Throwable e) {
             e.printStackTrace();
